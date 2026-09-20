@@ -54,13 +54,24 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Check Docker secret fingerprint
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "Username fingerprint:"
+          printf '%s' "$DOCKERHUB_USERNAME" | sha256sum
+
+          echo "Token fingerprint:"
+          printf '%s' "$DOCKERHUB_TOKEN" | sha256sum
+
       - name: Login to DockerHub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           TOKEN=$(printf '%s' "$DOCKERHUB_TOKEN" | tr -d '\r\n')
-          printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io \
+          printf '%s' "$TOKEN" | docker login docker.io \
             --username "$DOCKERHUB_USERNAME" \
             --password-stdin
 
