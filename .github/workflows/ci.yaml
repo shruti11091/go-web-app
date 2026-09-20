@@ -14,14 +14,13 @@ permissions:
 
 jobs:
 
-  # ==========================================================
-  # BUILD + TEST
-  # ==========================================================
+  # ============================================================
+  # 1. BUILD + TEST
+  # ============================================================
   build:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v7
 
@@ -40,14 +39,13 @@ jobs:
         run: go test ./...
 
 
-  # ==========================================================
-  # CODE QUALITY
-  # ==========================================================
+  # ============================================================
+  # 2. CODE QUALITY
+  # ============================================================
   code-quality:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v7
 
@@ -62,9 +60,9 @@ jobs:
           version: v2.13
 
 
-  # ==========================================================
-  # DOCKER BUILD + PUSH
-  # ==========================================================
+  # ============================================================
+  # 3. DOCKER BUILD + PUSH
+  # ============================================================
   docker:
     runs-on: ubuntu-latest
 
@@ -73,56 +71,19 @@ jobs:
       - code-quality
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-
-      # --------------------------------------------------------
-      # Docker information
-      # --------------------------------------------------------
-      - name: Check Docker
-        run: |
-          docker version
-          docker info
-
-
-      # --------------------------------------------------------
-      # Get Docker Hub registry authentication challenge
-      # --------------------------------------------------------
-      - name: Get Docker Hub authentication challenge
-        run: |
-          curl -sS \
-            -D /tmp/registry-headers.txt \
-            -o /dev/null \
-            https://registry-1.docker.io/v2/
-
-          echo "Docker Hub authentication challenge:"
-          grep -i "www-authenticate" /tmp/registry-headers.txt
-
-
-      # --------------------------------------------------------
-      # Docker Hub login
-      # --------------------------------------------------------
       - name: Login to Docker Hub
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
+        uses: docker/login-action@v4
+        with:
+          registry: docker.io
+          username: shru11091
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-          echo "Logging into Docker Hub..."
-
-          printf '%s' "$DOCKERHUB_TOKEN" | docker login \
-            --username "$DOCKERHUB_USERNAME" \
-            --password-stdin
-
-
-      # --------------------------------------------------------
-      # Build + Push image
-      # --------------------------------------------------------
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v7
         with:
@@ -130,40 +91,38 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/go-web-app:${{ github.run_id }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/go-web-app:latest
+            shru11091/go-web-app:${{ github.run_id }}
+            shru11091/go-web-app:latest
 
 
-  # ==========================================================
-  # UPDATE HELM
-  # ==========================================================
+  # ============================================================
+  # 4. UPDATE HELM
+  # ============================================================
   update-helm:
     runs-on: ubuntu-latest
 
     needs: docker
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Update Helm image tag
         run: |
           sed -i 's/tag: .*/tag: "${{ github.run_id }}"/' \
-            helm/go-web-app-chart/values.yaml
+          helm/go-web-app-chart/values.yaml
 
-      - name: Show Helm values
+      - name: Show updated Helm values
         run: |
           cat helm/go-web-app-chart/values.yaml
 
-      - name: Commit Helm change
+      - name: Commit and push Helm change
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add helm/go-web-app-chart/values.yaml
 
-          git commit \
-            -m "Update Helm image tag to ${{ github.run_id }}"
+          git commit -m "Update Helm image tag to ${{ github.run_id }}"
 
           git push
